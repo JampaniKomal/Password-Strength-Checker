@@ -1,107 +1,119 @@
 # Password Strength Checker
 
-A simple, privacy-focused web app to help users create strong passwords by checking them against customizable criteria. All password analysis happens locally—your data is never sent or stored.
+[![CI](https://github.com/JampaniKomal/Password-Strength-Checker/actions/workflows/ci.yml/badge.svg)](https://github.com/JampaniKomal/Password-Strength-Checker/actions/workflows/ci.yml)
+
+A privacy-focused, client-side web app that helps you build strong passwords.
+It checks a password two ways — against configurable **composition rules** and
+against a **practical reality check** (entropy plus a common-password / pattern
+screen) — because passing the rules is not the same as being hard to guess.
+Everything runs in your browser; nothing is ever sent or stored.
 
 **Live Demo:** [jampanikomal.github.io/Password-Strength-Checker](https://jampanikomal.github.io/Password-Strength-Checker/)
 
+![Password Strength Checker flagging a rule-passing but weak password](docs/screenshot.png)
+
+## Why two views?
+
+Composition rules ("at least one uppercase, one digit, one symbol, 8+ chars") are
+easy to game. `Password1!` satisfies every common rule and looks "Very Strong" by
+that measure — but it is a top-common word with a predictable suffix and would be
+guessed almost instantly. [NIST SP 800-63B](https://pages.nist.gov/800-63-3/sp800-63b.html)
+actually **recommends against** mandatory composition rules, favouring length and
+screening passwords against lists of known-compromised values.
+
+So this tool keeps the configurable composition rules (they are still useful, and
+you can tune them), but adds a second panel that:
+
+- estimates **entropy** from the character pool and length (a brute-force-only
+  upper bound);
+- screens for **common passwords** and common decorations of them (e.g.
+  `password` → `Password1!`);
+- flags obvious **patterns** — keyboard/alphabetical sequences, repeated runs,
+  trailing years, numeric-only;
+- gives a **practical verdict** that downgrades a password the rules would have
+  passed, and shows an honest crack-time estimate (dictionary speed when a pattern
+  is found, brute-force speed otherwise).
+
 ## Features
 
-- Enter your password and click "Check Password" for analysis.
-- **Animated Rule Display:** Rules are checked and shown one by one with smooth animation; the strength bar updates progressively.
-- **Customizable Rules:** Set requirements for:
-     - Minimum length
-     - Uppercase letters
-     - Lowercase letters
-     - Digits
-     - Special characters
-- **Privacy-Focused:** All logic runs in your browser; passwords are never transmitted or stored.
-- **Password Visibility Toggle:** Show/hide your password with an eye icon (visible by default).
-- **Dynamic Strength Bar:** Visual indicator updates as rules are checked.
-- **Informative Feedback:** See which rules your password meets or fails.
-- **Light/Dark Theme:** Switch between themes for comfortable viewing.
-- **Responsive Design:** Works on mobile and desktop.
+- **Configurable composition rules:** minimum length and minimum counts of
+  uppercase, lowercase, digits and special characters. Set any value to **0** to
+  disable that rule.
+- **Practical assessment:** entropy estimate, common-password/pattern warnings,
+  crack-time estimate and an overall practical rating.
+- **Privacy-focused:** all analysis is local; nothing is transmitted or stored.
+- **Animated per-rule results** and a 0–5 strength bar.
+- **Show/hide** toggle, **light/dark theme**, responsive layout.
 
-## Technologies Used
+## How it works
 
-- **HTML5:** Page structure
-- **CSS3:** Styling and layout
-- **JavaScript (jQuery):** Interactivity, analysis, and UI updates
+All analysis lives in one dependency-free module, [`js/strength.js`](js/strength.js),
+written so it runs unchanged in the browser (as the global `PasswordStrength`) and
+under Node, which is what lets it be unit-tested. The UI wiring is in
+[`js/app.js`](js/app.js).
 
-## Installation and Setup
+```
+index.html             # markup + CDN jQuery
+style.css              # styling (light/dark themes)
+js/strength.js         # analysis engine (browser + Node, no dependencies)
+js/app.js              # UI wiring
+tests/strength.test.js # automated tests (node --test)
+.github/workflows/     # CI
+docs/screenshot.png
+```
 
-1. **Clone the Repository:**
-      ```sh
-      git clone https://github.com/JampaniKomal/Password-Strength-Checker.git
-      cd Password-Strength-Checker
-      ```
+## Running locally
 
-2. **Run Locally:**
-      - Open `index.html` in your browser, or use a local server for best results.
+No build or install — the only runtime dependency is jQuery from a CDN:
 
-      **Using VS Code Live Server:**
-      - Install the "Live Server" extension, right-click `index.html`, and select "Open with Live Server."
+```sh
+git clone https://github.com/JampaniKomal/Password-Strength-Checker.git
+cd Password-Strength-Checker
+python -m http.server     # then open http://localhost:8000
+```
 
-      **Using Python HTTP Server:**
-      ```sh
-      python -m http.server 8000
-      ```
-      - Visit [http://localhost:8000/](http://localhost:8000/) in your browser.
+## Testing
 
-## Usage
+The engine has an automated suite (15 tests) using Node's built-in runner — no
+dependencies at all:
 
-- **Enter Password:** Type your password in the input field.
-- **Toggle Visibility:** Click the eye icon to show/hide your password.
-- **Check Password:** Click "Check Password" to analyze strength.
-- **Strength Bar:** View the colored bar and label for password strength.
-- **View Results:** See which rules are met or failed.
-- **Theme Toggle:** Switch between light and dark modes.
-- **About:** Click "Info" for privacy and app details.
+```sh
+npm test      # or: node --test
+```
 
-**Advanced Options:**
-- Click "Advanced Options" to customize rules.
-- Adjust minimum length and character type requirements.
-- Set any value to 0 to disable a rule.
-- Click "Apply" to save changes.
-- "Info" next to Advanced Options explains each rule.
+It covers composition-rule evaluation (including the "0 disables a rule" behaviour
+and the space-as-special-character quirk), the entropy estimate, the
+common-password and pattern detection, crack-time scaling, and the end-to-end
+check that a rule-passing common password is still rated weak. CI runs it on
+Node 18, 20 and 22.
 
-## Contributing
+## Bug found and fixed
 
-Fork, open issues, or submit pull requests for improvements or new features!
+Writing the tests and driving the real app confirmed a bug that had been fixed
+earlier and is now locked in by a regression test: the README documents
+"set any value to 0 to disable a rule", and that worked for the four
+character-type rules, but the **Minimum Length** Apply handler required a value
+`>= 1`, so entering `0` was silently rejected and the length rule could never be
+disabled. The validation now accepts `0`, and the input's `min` attribute matches.
+(This pass also added the missing `</body></html>` the page had been shipping
+without.)
 
-## Testing & Verification
+## Security notes and limitations
 
-Actually drove the app in a real browser (Playwright, served locally)
-rather than just reading the code: entered real passwords, clicked
-Check Password, and read back the actual displayed results and
-strength label, for both the default rules and after changing
-Advanced Options.
-
-That run surfaced a real bug: the README documents "Set any value to
-0 to disable a rule" as a supported way to turn off any of the 5
-checks, and that worked correctly for the 4 character-type rules —
-but the Minimum Length rule's own Apply handler required the value to
-be `>= 1`, so entering 0 and clicking Apply was silently rejected
-with an "Invalid Input" alert, and the rule was never actually
-disabled. Fixed the validation to accept 0 (and updated the input's
-HTML `min` attribute to match); re-ran the same test and confirmed
-applying 0 now succeeds and a 1-character password correctly passes
-the length check afterward.
-
-Also confirmed correct behavior that didn't need fixing: the
-password-visibility eye icon toggles correctly through repeated
-clicks (worth checking given the git history shows several earlier
-commits reworking this exact logic), and the animated per-rule
-results and strength bar/label are consistent for both a weak and a
-fully-passing password.
-
-## Known Limitations
-
-- No automated test suite — verification was exercising the real app
-  in a real browser.
-- The special-character check's definition includes a literal space
-  as a qualifying character, which is broader than some definitions
-  of "special character."
+- **It's a guidance tool, not a gate.** Type real passwords only into the live
+  page or your own local copy; the point is to *learn* what makes a password weak.
+- **The entropy number is a brute-force upper bound.** It assumes characters were
+  chosen at random, which real passwords are not — that is exactly why the
+  pattern/common-password screen exists and can override it.
+- **The common-password list is small and illustrative.** A real deployment should
+  screen against a full breached-password corpus (e.g. the Have I Been Pwned
+  range API, which uses k-anonymity so the password is never sent in full). This
+  app intentionally does no network calls.
+- **The crack-time estimate is a rough illustration** at an assumed ~10¹⁰ guesses/s
+  offline fast-hash rate, not a guarantee.
+- For serious use, prefer a long passphrase or a password manager's generated
+  password, and rely on a vetted estimator such as zxcvbn.
 
 ## License
 
-Open source under the MIT License. See [LICENSE](LICENSE).
+Open source under the [MIT License](LICENSE).
