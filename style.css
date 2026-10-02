@@ -530,3 +530,45 @@ body.light-mode .char-type-group input[type="number"] {
     }
 }
 
+
+/* --- Practical assessment panel --- */
+#practicalAssessment h3 {
+    margin-top: 0;
+}
+#practicalAssessment p {
+    margin: 8px 0;
+}
+.subtle {
+    color: var(--text-muted-dark);
+    font-weight: 400;
+    font-size: 0.9em;
+}
+body.light-mode .subtle {
+    color: var(--text-muted-light);
+}
+.warn-text {
+    color: var(--orange);
+    font-weight: 500;
+}
+.practical-verdict {
+    font-size: 1.1rem;
+    font-weight: bold;
+}
+.warnings-list {
+    list-style: none;
+    padding-left: 0;
+    margin: 10px 0;
+}
+.warnings-list li {
+    margin: 6px 0;
+    line-height: 1.4;
+}
+.nist-note {
+    border-top: 1px solid var(--border-dark);
+    padding-top: 10px;
+    margin-top: 12px !important;
+    line-height: 1.4;
+}
+body.light-mode .nist-note {
+    border-top-color: var(--border-light);
+}

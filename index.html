@@ -75,6 +75,16 @@
             <p class="placeholder-text">Enter a password and click "Check Password" to see the strength analysis.</p>
         </div>
 
+        <!-- Practical assessment: what the composition rules above can't tell you -->
+        <div id="practicalAssessment" class="card" style="display: none;">
+            <h3>Practical assessment <span class="subtle">(beyond the rules)</span></h3>
+            <p>Estimated entropy (brute force): <strong><span id="entropyBits">0</span> bits</strong> <span class="subtle" id="poolInfo"></span></p>
+            <p>Estimated crack time: <strong><span id="crackTime">-</span></strong> <span class="subtle" id="crackNote"></span></p>
+            <p id="practicalVerdict" class="practical-verdict"></p>
+            <ul id="warningsList" class="warnings-list"></ul>
+            <p class="subtle nist-note">Composition rules are a weak proxy for real strength: a password can pass every rule and still be trivial to guess. NIST SP 800-63B favours length and screening against known-compromised passwords over composition rules. These numbers are rough estimates, not guarantees.</p>
+        </div>
+
         <div class="advanced-options-section">
             <button id="advancedOptionsBtn" class="btn-main btn-blue">Advanced Options</button>
             <button id="advancedOptionsInfoBtn" class="btn-main btn-blue info-button">ⓘ Info</button>
@@ -90,8 +100,8 @@
             <span class="close-button info-close-button">&times;</span>
         </div>
         <div class="modal-body">
-            <p>This is a client-side password strength checker. Your password is **NOT** stored, transmitted, or saved anywhere. All checks are performed directly in your browser.</p>
-            <p>It helps you create strong passwords by evaluating them against a set of criteria.</p>
+            <p>This is a client-side password strength checker. Your password is <strong>NOT</strong> stored, transmitted, or saved anywhere. All checks are performed directly in your browser.</p>
+            <p>It checks a password two ways: against configurable <strong>composition rules</strong> (length and character types) and against a <strong>practical assessment</strong> — an entropy estimate plus a screen for common passwords and obvious patterns. The second view matters because a password can pass every rule and still be trivial to guess (try <code>Password1!</code>).</p>
         </div>
     </div>
 </div>
@@ -163,289 +173,7 @@
 </div>
 
 <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
-<script>
-    $(document).ready(function () {
-        // --- Theme Toggle Logic ---
-        const applyTheme = (theme) => {
-            $('body').removeClass('dark-mode light-mode').addClass(theme);
-            localStorage.setItem('theme', theme);
-        };
-
-        $('#themeToggle').on('change', function() {
-            if ($(this).is(':checked')) {
-                applyTheme('dark-mode');
-            } else {
-                applyTheme('light-mode');
-            }
-        });
-
-        // Set initial theme based on localStorage or default to dark
-        if (localStorage.getItem('theme') === 'light-mode') {
-            $('#themeToggle').prop('checked', false);
-            applyTheme('light-mode');
-        } else {
-            $('#themeToggle').prop('checked', true);
-            applyTheme('dark-mode');
-        }
-
-        // --- Custom Alert/Message Box Logic ---
-        const customAlertModal = $('#customAlertModal');
-        const customAlertTitle = $('#customAlertTitle');
-        const customAlertMessage = $('#customAlertMessage');
-
-        const showAlert = (title, message) => {
-            customAlertTitle.text(title);
-            customAlertMessage.text(message);
-            customAlertModal.show();
-        };
-
-        $('.custom-alert-close-button, .custom-alert-ok-button').on('click', () => customAlertModal.hide());
-        $(window).on('click', (event) => {
-            if ($(event.target).is(customAlertModal)) {
-                customAlertModal.hide();
-            }
-        });
-
-        // --- Modals Logic ---
-        const infoModal = $('#infoModal');
-        const advancedOptionsModal = $('#advancedOptionsModal');
-        const advancedOptionsInfoModal = $('#advancedOptionsInfoModal'); // New modal
-
-        $('#infoBtn').on('click', () => infoModal.show());
-        $('.info-close-button').on('click', () => infoModal.hide());
-
-        $('#advancedOptionsBtn').on('click', () => advancedOptionsModal.show());
-        $('.advanced-close-button').on('click', () => advancedOptionsModal.hide());
-
-        $('#advancedOptionsInfoBtn').on('click', () => advancedOptionsInfoModal.show()); // Show new info modal
-        $('.advanced-info-close-button').on('click', () => advancedOptionsInfoModal.hide()); // Close new info modal
-
-        // Close modals when clicking outside
-        $(window).on('click', (event) => {
-            if ($(event.target).is(infoModal)) {
-                infoModal.hide();
-            }
-            if ($(event.target).is(advancedOptionsModal)) {
-                advancedOptionsModal.hide();
-            }
-            if ($(event.target).is(advancedOptionsInfoModal)) { // For new modal
-                advancedOptionsInfoModal.hide();
-            }
-        });
-
-        // --- Password Visibility Toggle ---
-        $('#togglePasswordVisibility').on('click', function() {
-            const passwordInput = $('#passwordInput');
-            const eyeOpen = $('#eyeOpen');
-            const eyeClosed = $('#eyeClosed');
-
-            if (passwordInput.attr('type') === 'password') {
-                passwordInput.attr('type', 'text');
-                eyeOpen.show();
-                eyeClosed.hide();
-            } else {
-                passwordInput.attr('type', 'password');
-                eyeOpen.hide();
-                eyeClosed.show();
-            }
-        });
-
-        // --- Password Checking Logic ---
-        let currentRules = {
-            minLength: 8,
-            requireUppercase: 1,
-            requireLowercase: 1,
-            requireNumbers: 1,
-            requireSpecial: 1
-        };
-
-        const updateStrengthBar = (score, totalChecks) => {
-            const strengthBar = $('#strengthBar');
-            const strengthLabel = $('#strengthLabel');
-            let width = (score / totalChecks) * 100; 
-            let color = 'var(--red)';
-            let label = 'Strength: N/A';
-
-            if (score === 0) {
-                width = 0;
-                label = 'Strength: N/A';
-            } else if (score === 1) {
-                color = 'var(--red)';
-                label = 'Strength: Weak';
-            } else if (score === 2) {
-                color = 'var(--orange)';
-                label = 'Strength: Fair';
-            } else if (score === 3) {
-                color = 'var(--primary)'; // Blue
-                label = 'Strength: Good';
-            } else if (score === 4) {
-                color = 'var(--green)';
-                label = 'Strength: Strong';
-            } else if (score === 5) {
-                color = 'var(--green)';
-                label = 'Strength: Very Strong!';
-            }
-
-            strengthBar.css({
-                width: `${width}%`,
-                backgroundColor: color
-            });
-            strengthLabel.text(label);
-        };
-
-        const checkPasswordStrength = () => {
-            const password = $('#passwordInput').val();
-            const resultsDiv = $('#passwordResults');
-            resultsDiv.empty(); // Clear previous results
-
-            // Show the hidden sections when checkPasswordStrength is called
-            $('.strength-bar-container').show();
-            $('#passwordResults').show();
-
-            if (password.length === 0) {
-                resultsDiv.append('<p class="placeholder-text">Enter a password and click "Check Password" to see the strength analysis.</p>');
-                updateStrengthBar(0, 5); // Reset strength bar
-                return;
-            }
-
-            let passedChecksCount = 0;
-            const checks = [];
-
-            // Define all checks
-            checks.push({
-                name: 'Minimum Length',
-                rule: currentRules.minLength,
-                check: (pwd) => pwd.length >= currentRules.minLength,
-                message: (passed, count) => `${passed ? '[PASS]' : '[FAIL]'} Minimum length of ${currentRules.minLength} characters`
-            });
-
-            checks.push({
-                name: 'Uppercase Letters',
-                rule: currentRules.requireUppercase,
-                check: (pwd) => (pwd.match(/[A-Z]/g) || []).length >= currentRules.requireUppercase,
-                count: (pwd) => (pwd.match(/[A-Z]/g) || []).length,
-                message: (passed, count) => `${passed ? '[PASS]' : '[FAIL]'} At least ${currentRules.requireUppercase} uppercase letter(s) (found: ${count})`
-            });
-
-            checks.push({
-                name: 'Lowercase Letters',
-                rule: currentRules.requireLowercase,
-                check: (pwd) => (pwd.match(/[a-z]/g) || []).length >= currentRules.requireLowercase,
-                count: (pwd) => (pwd.match(/[a-z]/g) || []).length,
-                message: (passed, count) => `${passed ? '[PASS]' : '[FAIL]'} At least ${currentRules.requireLowercase} lowercase letter(s) (found: ${count})`
-            });
-
-            checks.push({
-                name: 'Numbers',
-                rule: currentRules.requireNumbers,
-                check: (pwd) => (pwd.match(/[0-9]/g) || []).length >= currentRules.requireNumbers,
-                count: (pwd) => (pwd.match(/[0-9]/g) || []).length,
-                message: (passed, count) => `${passed ? '[PASS]' : '[FAIL]'} At least ${currentRules.requireNumbers} number(s) (found: ${count})`
-            });
-
-            checks.push({
-                name: 'Special Characters',
-                rule: currentRules.requireSpecial,
-                check: (pwd) => (pwd.match(/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~` ]/g) || []).length >= currentRules.requireSpecial,
-                count: (pwd) => (pwd.match(/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~` ]/g) || []).length,
-                message: (passed, count) => `${passed ? '[PASS]' : '[FAIL]'} At least ${currentRules.requireSpecial} special character(s) (found: ${count})`
-            });
-            
-            // Initial state for strength bar and label
-            updateStrengthBar(0, checks.length);
-            $('#checkPasswordBtn').prop('disabled', true); // Disable button during check
-
-            let currentCheckIndex = 0;
-            const animateCheck = () => {
-                if (currentCheckIndex < checks.length) {
-                    const check = checks[currentCheckIndex];
-                    const passed = check.check(password);
-                    const count = check.count ? check.count(password) : null; // Get count if available
-                    
-                    const pElement = $(`<p class="${passed ? 'success-text' : 'error-text'}"></p>`);
-                    pElement.text(check.message(passed, count));
-                    pElement.hide().appendTo(resultsDiv).fadeIn(300); // Fade in each result
-
-                    if (passed) {
-                        passedChecksCount++;
-                    }
-                    updateStrengthBar(passedChecksCount, checks.length);
-
-                    currentCheckIndex++;
-                    setTimeout(animateCheck, 400); // Delay for next check
-                } else {
-                    // All checks complete, show overall strength
-                    if (passedChecksCount === checks.length) {
-                        resultsDiv.prepend('<p class="overall-strength success-text">Password is Strong!</p>');
-                    } else {
-                        resultsDiv.prepend('<p class="overall-strength error-text">Password needs improvement.</p>');
-                    }
-                    $('#checkPasswordBtn').prop('disabled', false); // Re-enable button
-                }
-            };
-
-            animateCheck(); // Start the animation
-        };
-
-        $('#checkPasswordBtn').on('click', checkPasswordStrength);
-        // Removed $('#passwordInput').on('keyup', checkPasswordStrength); for non-realtime feedback
-
-        // --- Advanced Options Logic ---
-        const loadAdvancedRules = () => {
-            $('#minLengthInput').val(currentRules.minLength);
-            $('#requireUppercase').val(currentRules.requireUppercase);
-            $('#requireLowercase').val(currentRules.requireLowercase);
-            $('#requireNumbers').val(currentRules.requireNumbers);
-            $('#requireSpecial').val(currentRules.requireSpecial);
-        };
-
-        $('.btn-apply').on('click', function() {
-            const ruleType = $(this).data('rule');
-            if (ruleType === 'minLength') {
-                const value = parseInt($('#minLengthInput').val());
-                if (!isNaN(value) && value >= 0) {
-                    currentRules.minLength = value;
-                    showAlert('Rule Applied', `Minimum length rule applied: ${value} characters.`);
-                } else {
-                    showAlert('Invalid Input', 'Please enter a valid minimum length (0 or a positive number).');
-                }
-            }
-            // Do not re-check password strength immediately after applying rules
-            // The user will click "Check Password" again.
-            advancedOptionsModal.hide(); // Hide modal after applying
-        });
-
-        $('.apply-char-rules-btn').on('click', function() {
-            const uppercase = parseInt($('#requireUppercase').val());
-            const lowercase = parseInt($('#requireLowercase').val());
-            const numbers = parseInt($('#requireNumbers').val());
-            const special = parseInt($('#requireSpecial').val());
-
-            let isValid = true;
-            if (isNaN(uppercase) || uppercase < 0) isValid = false;
-            if (isNaN(lowercase) || lowercase < 0) isValid = false;
-            if (isNaN(numbers) || numbers < 0) isValid = false;
-            if (isNaN(special) || special < 0) isValid = false;
-
-            if (isValid) {
-                currentRules.requireUppercase = uppercase;
-                currentRules.requireLowercase = lowercase;
-                currentRules.requireNumbers = numbers;
-                currentRules.requireSpecial = special;
-                showAlert('Rules Applied', 'Character type rules applied!');
-            } else {
-                showAlert('Invalid Input', 'Please enter valid non-negative numbers for all character type rules.');
-            }
-            // Do not re-check password strength immediately after applying rules
-            // The user will click "Check Password" again.
-            advancedOptionsModal.hide(); // Hide modal after applying
-        });
-
-        // Load rules when advanced options modal is opened
-        $('#advancedOptionsBtn').on('click', loadAdvancedRules);
-
-        // Initial check for empty password input
-        // Removed this call as per user request to hide sections initially
-        // checkPasswordStrength(); 
-    });
-</script>
+<script src="js/strength.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
