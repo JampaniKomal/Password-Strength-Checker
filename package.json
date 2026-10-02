@@ -1,0 +1,10 @@
+{
+  "name": "password-strength-checker",
+  "version": "2.0.0",
+  "description": "Privacy-focused, client-side password checker: configurable composition rules plus an entropy and common-password/pattern screen.",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "test": "node --test"
+  }
+}
